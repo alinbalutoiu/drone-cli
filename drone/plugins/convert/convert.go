@@ -1,12 +1,17 @@
 package convert
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/drone/drone-cli/drone/internal"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
+	"github.com/drone/drone-yaml/yaml"
+	"github.com/drone/drone-yaml/yaml/pretty"
 	"github.com/urfave/cli"
 )
 
@@ -20,6 +25,10 @@ var Command = cli.Command{
 		cli.StringFlag{
 			Name:  "path",
 			Usage: "path to the configuration file",
+		},
+		cli.BoolTFlag{
+			Name:  "format",
+			Usage: "Write output as formatted YAML",
 		},
 		cli.StringFlag{
 			Name:  "ref",
@@ -112,11 +121,30 @@ func convert(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	var output string
 	switch {
 	case res == nil:
-		println(string(raw))
+		output = string(raw)
 	case res != nil:
-		println(res.Data)
+		output = res.Data
 	}
+
+	// if the user disables pretty printing, the yaml is printed
+	// to the console.
+	if c.BoolT("format") == false {
+		println(output)
+	} else {
+		buf := new(bytes.Buffer)
+		buf.WriteString(output)
+		manifest, err := yaml.Parse(buf)
+		if err != nil {
+			return err
+		}
+		buf.Reset()
+		pretty.Print(buf, manifest)
+		io.Copy(os.Stdout, buf)
+	}
+
 	return nil
 }
